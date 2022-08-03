@@ -54,6 +54,15 @@ export class EventsController {
     });
   }
 
+  @Get('practice2')
+  async practice2() {
+    return await this.repository.findOne({
+      where: { id: 1 },
+      // loadEagerRelations: false,
+      // relations: ['attendees'],
+    });
+  }
+
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     const event = await this.repository.findOne({
