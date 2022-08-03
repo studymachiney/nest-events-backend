@@ -9,6 +9,8 @@ services:
       MYSQL_ROOT_PASSWORD: example
     ports:
       - 3306:3306
+    security_opt:
+      - seccomp:unconfined
 
   postgres:
     image: postgres:13.1
