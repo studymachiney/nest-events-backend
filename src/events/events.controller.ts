@@ -13,8 +13,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Like, MoreThan, Repository } from 'typeorm';
+import { Attendee } from './attendee.entity';
 import { CreateEventDto } from './create-event.dto';
 import { EventEntity } from './event.entity';
+import { EventsService } from './event.service';
 import { UpdateEventDto } from './update-event.dto';
 
 @Controller('/events')
@@ -24,6 +26,9 @@ export class EventsController {
   constructor(
     @InjectRepository(EventEntity)
     private readonly repository: Repository<EventEntity>,
+    @InjectRepository(Attendee)
+    private readonly attendeeRepository: Repository<Attendee>,
+    private readonly eventsService: EventsService,
   ) {}
 
   @Get()
@@ -56,18 +61,38 @@ export class EventsController {
 
   @Get('practice2')
   async practice2() {
-    return await this.repository.findOne({
-      where: { id: 1 },
-      // loadEagerRelations: false,
-      // relations: ['attendees'],
-    });
+    // return await this.repository.findOne({
+    //   where: { id: 1 },
+    //   // loadEagerRelations: false,
+    //   // relations: ['attendees'],
+    // });
+    // const event = await this.repository.findOne({
+    //   where: { id: 1 },
+    //   relations: ['attendees'],
+    // });
+
+    // const attendee = new Attendee();
+    // attendee.name = 'Using cascade';
+    // // attendee.event = event;
+
+    // event.attendees.push(attendee);
+
+    // await this.repository.save(event);
+    // // await this.attendeeRepository.save(attendee);
+
+    // return event;
+    return await this.repository
+      .createQueryBuilder('e')
+      .select(['e.id', 'e.name'])
+      .orderBy('e.id', 'DESC')
+      .take(3)
+      .getMany();
   }
 
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
-    const event = await this.repository.findOne({
-      where: { id },
-    });
+    const event = await this.eventsService.getEvent(id);
+
     if (!event) {
       throw new NotFoundException();
     }

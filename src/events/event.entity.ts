@@ -19,7 +19,13 @@ export class EventEntity {
   address: string;
 
   @OneToMany(() => Attendee, (attendee) => attendee.event, {
-    eager: true,
+    cascade: true,
   })
   attendees: Attendee[];
+
+  attendeeCount?: number;
+
+  attendeeRejected?: number;
+  attendeeMaybe?: number;
+  attendeeAccepted?: number;
 }
