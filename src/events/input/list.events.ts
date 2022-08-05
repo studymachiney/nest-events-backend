@@ -1,5 +1,6 @@
 export class ListEvents {
   when?: WhenEventFilter = WhenEventFilter.All;
+  page = 1;
 }
 
 export enum WhenEventFilter {
