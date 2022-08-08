@@ -1,7 +1,9 @@
+import { EventEntity } from 'src/events/event.entity';
 import {
   Column,
   Entity,
   JoinColumn,
+  OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -30,4 +32,7 @@ export class User {
   @OneToOne(() => Profile)
   @JoinColumn()
   profile: Profile;
+
+  @OneToMany(() => EventEntity, (event) => event.organizer)
+  organized: EventEntity[];
 }

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   Logger,
@@ -11,29 +12,23 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Like, MoreThan, Repository } from 'typeorm';
-import { Attendee } from './attendee.entity';
 import { CreateEventDto } from './input/create-event.dto';
-import { EventEntity } from './event.entity';
 import { EventsService } from './event.service';
 import { UpdateEventDto } from './input/update-event.dto';
 import { ListEvents } from './input/list.events';
+import { CurrentUser } from 'src/auth/current-user.decorator';
+import { User } from 'src/auth/user.entity';
+import { AuthGuardJwt } from 'src/auth/auth-guard.jwt';
 
 @Controller('/events')
 export class EventsController {
   private readonly logger = new Logger(EventsController.name);
 
-  constructor(
-    @InjectRepository(EventEntity)
-    private readonly repository: Repository<EventEntity>,
-    @InjectRepository(Attendee)
-    private readonly attendeeRepository: Repository<Attendee>,
-    private readonly eventsService: EventsService,
-  ) {}
+  constructor(private readonly eventsService: EventsService) {}
 
   @Get()
   @UsePipes(new ValidationPipe({ transform: true }))
@@ -50,55 +45,55 @@ export class EventsController {
     return events;
   }
 
-  @Get('/practice')
-  async practice() {
-    return await this.repository.find({
-      select: ['id', 'when'],
-      where: [
-        {
-          id: MoreThan(3),
-          when: MoreThan(new Date('2021-02-12T13:00:00')),
-        },
-        {
-          description: Like('%meet%'),
-        },
-      ],
-      take: 2,
-      order: {
-        id: 'DESC',
-      },
-    });
-  }
+  // @Get('/practice')
+  // async practice() {
+  //   return await this.repository.find({
+  //     select: ['id', 'when'],
+  //     where: [
+  //       {
+  //         id: MoreThan(3),
+  //         when: MoreThan(new Date('2021-02-12T13:00:00')),
+  //       },
+  //       {
+  //         description: Like('%meet%'),
+  //       },
+  //     ],
+  //     take: 2,
+  //     order: {
+  //       id: 'DESC',
+  //     },
+  //   });
+  // }
 
-  @Get('practice2')
-  async practice2() {
-    // return await this.repository.findOne({
-    //   where: { id: 1 },
-    //   // loadEagerRelations: false,
-    //   // relations: ['attendees'],
-    // });
-    // const event = await this.repository.findOne({
-    //   where: { id: 1 },
-    //   relations: ['attendees'],
-    // });
+  // @Get('practice2')
+  // async practice2() {
+  //   // return await this.repository.findOne({
+  //   //   where: { id: 1 },
+  //   //   // loadEagerRelations: false,
+  //   //   // relations: ['attendees'],
+  //   // });
+  //   // const event = await this.repository.findOne({
+  //   //   where: { id: 1 },
+  //   //   relations: ['attendees'],
+  //   // });
 
-    // const attendee = new Attendee();
-    // attendee.name = 'Using cascade';
-    // // attendee.event = event;
+  //   // const attendee = new Attendee();
+  //   // attendee.name = 'Using cascade';
+  //   // // attendee.event = event;
 
-    // event.attendees.push(attendee);
+  //   // event.attendees.push(attendee);
 
-    // await this.repository.save(event);
-    // // await this.attendeeRepository.save(attendee);
+  //   // await this.repository.save(event);
+  //   // // await this.attendeeRepository.save(attendee);
 
-    // return event;
-    return await this.repository
-      .createQueryBuilder('e')
-      .select(['e.id', 'e.name'])
-      .orderBy('e.id', 'DESC')
-      .take(3)
-      .getMany();
-  }
+  //   // return event;
+  //   return await this.repository
+  //     .createQueryBuilder('e')
+  //     .select(['e.id', 'e.name'])
+  //     .orderBy('e.id', 'DESC')
+  //     .take(3)
+  //     .getMany();
+  // }
 
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
@@ -111,35 +106,50 @@ export class EventsController {
   }
 
   @Post()
-  async create(@Body() input: CreateEventDto) {
-    return await this.repository.save({
-      ...input,
-      when: new Date(input.when),
-    });
+  @UseGuards(AuthGuardJwt)
+  async create(@Body() input: CreateEventDto, @CurrentUser() user: User) {
+    return await this.eventsService.createEvent(input, user);
   }
 
   @Patch(':id')
-  async update(@Param('id') id, @Body() input: UpdateEventDto) {
-    const event = await this.repository.findOne(id);
+  @UseGuards(AuthGuardJwt)
+  async update(
+    @Param('id') id,
+    @Body() input: UpdateEventDto,
+    @CurrentUser() user: User,
+  ) {
+    const event = await this.eventsService.getEvent(id);
 
     if (!event) {
       throw new NotFoundException();
     }
 
-    return await this.repository.save({
-      ...event,
-      ...input,
-      when: input.when ? new Date(input.when) : event.when,
-    });
+    if (event.organizerId !== user.id) {
+      throw new ForbiddenException(
+        null,
+        `You are not authorized to change this event`,
+      );
+    }
+
+    return await this.eventsService.updateEvent(event, input);
   }
 
   @Delete(':id')
+  @UseGuards(AuthGuardJwt)
   @HttpCode(204)
-  async remove(@Param('id') id) {
-    const result = await this.eventsService.deleteEvent(id);
+  async remove(@Param('id') id, @CurrentUser() user: User) {
+    const event = await this.eventsService.getEvent(id);
 
-    if (result?.affected !== 1) {
+    if (!event) {
       throw new NotFoundException();
     }
+
+    if (event.organizerId !== user.id) {
+      throw new ForbiddenException(
+        null,
+        `You are not authorized to change this event`,
+      );
+    }
+    await this.eventsService.deleteEvent(id);
   }
 }
